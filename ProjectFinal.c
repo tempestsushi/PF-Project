@@ -187,7 +187,7 @@ int main() {
 //    "Apply gypsum to reduce salinity", "Add urea fertilizer for nitrogen boost", "Add potassium-based fertilizers",
 //    "Add lime to improve calcium levels", "Add magnesium sulfate to correct magnesium deficiency", 
 //    "Adjust soil pH using sulfur-based additives", "Improve drainage or irrigation practices"
-// per Acre is supposed to be used.
+// per Acre is supposed to be used....
 
 
 
