@@ -170,6 +170,52 @@ int main() {
 
     return 0;
 }
+int ValidateCrop(char *crop_name, CropData crops[], int crop_count) {
+    for (int i = 0; i < crop_count; i++) {
+        if (strcmp(crop_name, crops[i].crop_name) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+int ValidateRegion(char *crop_name, char *region, RegionValidity Regions[], int region_count) {
+    for (int i = 0; i < region_count; i++) {
+        if (strcmp(crop_name, Regions[i].crop_name) == 0) {
+            for (int j = 0; j < 3; j++) {
+                if (strcmp(region, Regions[i].regions[j]) == 0) {
+                    return 1; 
+                }
+            }
+        }
+    }
+    return 0; 
+}
+void AnalysisofSoilWater(CropData crop, float *values, char *region, char *season, Fertilizer fertilizerConfig, FILE *file, float landarea) {
+    int severity = 0;
+
+    // Compare each parameter with thresholds
+    if (values[0] > crop.salinity_max) {
+        fprintf(file, "High salinity detected. Apply %.2f kg of gypsum per acre.\n", fertilizerConfig.gypsum_per_acre);
+        severity++;
+    }
+    if (values[1] < crop.nitrogen_min) {
+        fprintf(file, "Low nitrogen detected. Add %.2f kg of urea fertilizer per acre.\n", fertilizerConfig.urea_per_acre);
+        severity++;
+    }
+    // Repeat for other parameters (Potassium, Calcium, etc.)
+
+    // Severity grading
+    if (severity == 0) {
+        fprintf(file, "Soil condition: Fertile\n");
+    } else if (severity <= 3) {
+        fprintf(file, "Soil condition: Sub-Fertile\n");
+    } else {
+        fprintf(file, "Soil condition: Unfertile\n");
+    }
+}
+
+
+
 
 // Validity of Region and Crop Function: Crop validity is basically the crop you entered is valid to the pre-defined or not.
 //                                       Region validity is if the crop even grows in that region:
@@ -188,7 +234,6 @@ int main() {
 //    "Add lime to improve calcium levels", "Add magnesium sulfate to correct magnesium deficiency", 
 //    "Adjust soil pH using sulfur-based additives", "Improve drainage or irrigation practices"
 // per Acre is supposed to be used....
-
 
 
 
