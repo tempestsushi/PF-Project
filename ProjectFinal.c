@@ -281,7 +281,7 @@ void analyzeSoilAndWater(CropData crop, float *values, char *region, char *seaso
         recovery_months = 6;
     }
 
-    estimateMaterials(land_area, values[0], values[1], file);
+    estimateMaterials(land_area, values[0], values[1], values[2], values[3], values[4], file);
 }
 
 // Function to estimate required materials
