@@ -50,11 +50,16 @@ typedef struct
 
 int ValidateRegion(char *crop_name, char *region, RegionValidity Regions[], int crop_count);
 int ValidateCrop(char *crop_name, CropData crops[], int crop_count);
-void AnalysisofSoilWater(CropData crop, float *values, char *region, char *season, Fertilizer fertilizerConfig, FILE *file, float landarea);
-void EstimateMinerals(int land_area, float salinity, float nitrogen, FILE *file);
-void savereportfile(char *region, char *season, CropData crop, float *values, Date date, FILE *file, int recovery_months, int issues);
+void EstimateMinerals(int land_area, float salinity, float nitrogen, float potassium, float calcium, float magnesium, 
+                      float *gypsum_required, float *urea_required, float *potash_required, float *lime_required, 
+                      float *sulfur_required, float *magnesium_sulfate_required, float *calcium_sulfate_required);
+void AnalysisofSoilAndWater(CropData crop, float *values, char *region, char *season, Fertilizer fertilizerConfig, FILE *file, int landarea, Date date);
+void SaveReportFile(FILE *file, CropData crop, const char *region, const char *season, float *values, int land_area, 
+                    float gypsum_required, float urea_required, float potash_required, float lime_required, 
+                    float sulfur_required, float magnesium_sulfate_required, float calcium_sulfate_required, Date date, int recovery_months);
 
-int main() {
+int main() 
+{
     char region[20], season[20], cropname[20];
     int regionchoice, seasonchoice;
     float landarea;
@@ -163,9 +168,7 @@ int main() {
         return 1;
     }
 
-    AnalysisofSoilWater(selectedcrop, values, region, season, fertilizerConfig, file, landarea);
-    savereportfile(region, season, selectedcrop, values, date, file, recoverymonths, issues);
-    fclose(file);
+    AnalysisofSoilAndWater(selectedcrop, values, region, season, fertilizerConfig, file, landarea, date);
 
     return 0;
 }
@@ -199,8 +202,9 @@ int ValidateRegion(char *crop_name, char *region, RegionValidity Regions[], int 
     }
     return 0; 
 }
+
 // Function to analyze soil and water conditions
-void analyzeSoilAndWater(CropData crop, float *values, char *region, char *season, FertilizerConfig fertilizerConfig, FILE *file, int land_area) 
+void AnalysisofSoilAndWater(CropData crop, float *values, char *region, char *season, Fertilizer fertilizerConfig, FILE *file, int landarea, Date date) 
 {
     printf("\nSoil and Water Analysis for Crop: %s\nRegion: %s | Season: %s\n", crop.crop_name, region, season);
 
@@ -215,11 +219,28 @@ void analyzeSoilAndWater(CropData crop, float *values, char *region, char *seaso
     };
 
     const char *units[] = {"dS/m", "%", "%", "%", "%", "", "feet"};
-    const char *actions[] = 
+    
+    // Separate actions for low and high values
+    const char *lowActions[] = 
     {
-        "Apply gypsum to reduce salinity", "Add urea fertilizer for nitrogen boost", "Add potassium-based fertilizers",
-        "Add lime to improve calcium levels", "Add magnesium sulfate to correct magnesium deficiency", 
-        "Adjust soil pH using sulfur-based additives", "Improve drainage or irrigation practices"
+        "Apply gypsum to reduce salinity", 
+        "Add urea fertilizer for nitrogen boost", 
+        "Add potassium-based fertilizers",
+        "Add lime to improve calcium levels", 
+        "Add magnesium sulfate to correct magnesium deficiency", 
+        "Adjust soil pH using sulfur-based additives", 
+        "Improve drainage or irrigation practices"
+    };
+
+    const char *highActions[] = 
+    {
+        "Reduce irrigation or apply leaching to lower salinity", 
+        "Reduce nitrogen input or use nitrification inhibitors", 
+        "Reduce potassium fertilizers",
+        "Reduce calcium-based fertilizers", 
+        "Reduce magnesium sulfate use", 
+        "Use sulfur to lower water pH", 
+        "Improve irrigation system to maintain proper water levels"
     };
 
     int recovery_months = 0;
@@ -228,47 +249,23 @@ void analyzeSoilAndWater(CropData crop, float *values, char *region, char *seaso
 
     for (int i = 0; i < 7; i++) 
     {
-        if (i == 0) 
+        if (values[i] < ranges[i][0]) 
         {
-            if (values[i] < ranges[i][0]) 
-            {
-                printf("- %s: %.2f %s - Low (%s)\n", parameters[i], values[i], units[i], actions[i]);
-                recovery_months = 6;
-                issues++;
-                overall_health = 3;
-            } 
-            else if (values[i] > ranges[i][1]) 
-            {
-                printf("- %s: %.2f %s - High (%s)\n", parameters[i], values[i], units[i], actions[i]);
-                recovery_months = 6;
-                issues++;
-                overall_health = 2;
-            } 
-            else 
-            {
-                printf("- %s: %.2f %s - Optimal\n", parameters[i], values[i], units[i]);
-            }
+            printf("- %s: %.2f %s - Low (%s)\n", parameters[i], values[i], units[i], lowActions[i]);
+            recovery_months = 6;
+            issues++;
+            overall_health = 3;
+        } 
+        else if (values[i] > ranges[i][1]) 
+        {
+            printf("- %s: %.2f %s - High (%s)\n", parameters[i], values[i], units[i], highActions[i]);
+            recovery_months = 6;
+            issues++;
+            overall_health = 2;
         } 
         else 
         {
-            if (values[i] < ranges[i][0]) 
-            {
-                printf("- %s: %.2f %s - Low (%s)\n", parameters[i], values[i], units[i], actions[i]);
-                recovery_months = 6;
-                issues++;
-                overall_health = 3;
-            } 
-            else if (values[i] > ranges[i][1]) 
-            {
-                printf("- %s: %.2f %s - High (%s)\n", parameters[i], values[i], units[i], actions[i]);
-                recovery_months = 6;
-                issues++;
-                overall_health = 2;
-            } 
-            else 
-            {
-                printf("- %s: %.2f %s - Optimal\n", parameters[i], values[i], units[i]);
-            }
+            printf("- %s: %.2f %s - Optimal\n", parameters[i], values[i], units[i]);
         }
     }
 
@@ -281,93 +278,102 @@ void analyzeSoilAndWater(CropData crop, float *values, char *region, char *seaso
         recovery_months = 6;
     }
 
-    estimateMaterials(land_area, values[0], values[1], values[2], values[3], values[4], file);
+    printf("\nRecovery Time: %d months\n", recovery_months);
+
+    // Estimate materials
+    float gypsum_required, urea_required, potash_required, lime_required, sulfur_required, magnesium_sulfate_required, calcium_sulfate_required;
+    EstimateMinerals(landarea, values[0], values[1], values[2], values[3], values[4], 
+                     &gypsum_required, &urea_required, &potash_required, &lime_required, 
+                     &sulfur_required, &magnesium_sulfate_required, &calcium_sulfate_required);
+    
+    // Save to file
+    SaveReportFile(file, crop, region, season, values, landarea, gypsum_required, urea_required, potash_required, 
+               lime_required, sulfur_required, magnesium_sulfate_required, calcium_sulfate_required, date, recovery_months);
 }
 
-// Function to estimate required materials
-void estimateMaterials(int land_area, float salinity, float nitrogen, float potassium, float calcium, float magnesium, FILE *file) 
+void EstimateMinerals(int land_area, float salinity, float nitrogen, float potassium, float calcium, float magnesium, 
+                      float *gypsum_required, float *urea_required, float *potash_required, float *lime_required, 
+                      float *sulfur_required, float *magnesium_sulfate_required, float *calcium_sulfate_required) 
 {
-    printf("\nEstimating Materials for %d acres of land...\n", land_area);
-
     // Handle Salinity
-    if (salinity > 2.0) 
+    *gypsum_required = 0;
+    if (salinity > 4.0)
     {
-        float gypsum_required_high = land_area * 2;
-        printf("High Salinity: Apply %.2f tons of gypsum.\n", gypsum_required_high);
-        fprintf(file, "High Salinity: Apply %.2f tons of gypsum for %d acres.\n", gypsum_required_high, land_area);
+        *gypsum_required = land_area * 2;
     } 
-    else if (salinity < 0.5) 
+    else if (salinity < 1.0) 
     {
-        float saline_water_required = land_area * 0.5;
-        printf("Low Salinity: Introduce %.2f units of saline water.\n", saline_water_required);
-        fprintf(file, "Low Salinity: Introduce %.2f units of saline water for %d acres.\n", saline_water_required, land_area);
+        *gypsum_required = land_area * 0.5;
     }
 
     // Handle Nitrogen
-    if (nitrogen > 2.5) 
+    *urea_required = 0;
+    if (nitrogen < 1.5) 
     {
-        printf("High Nitrogen: Avoid applying urea.\n");
-        fprintf(file, "High Nitrogen: Avoid applying urea for %d acres.\n", land_area);
-    } 
-    else if (nitrogen < 1.5) 
-    {
-        float urea_required_low = land_area * 1.5;
-        printf("Low Nitrogen: Apply %.2f tons of urea.\n", urea_required_low);
-        fprintf(file, "Low Nitrogen: Apply %.2f tons of urea for %d acres.\n", urea_required_low, land_area);
+        *urea_required = land_area * 1.5;
     }
 
     // Handle Potassium
-    if (potassium > 1.0) 
+    *potash_required = 0;
+    if (potassium < 0.6) 
     {
-        float gypsum_required_potassium = land_area * 0.5;
-        printf("High Potassium: Apply %.2f tons of gypsum.\n", gypsum_required_potassium);
-        fprintf(file, "High Potassium: Apply %.2f tons of gypsum for %d acres.\n", gypsum_required_potassium, land_area);
-    } 
-    else if (potassium < 0.5) 
-    {
-        float potash_fertilizer_required = land_area * 0.8;
-        printf("Low Potassium: Apply %.2f tons of potash-based fertilizers.\n", potash_fertilizer_required);
-        fprintf(file, "Low Potassium: Apply %.2f tons of potash-based fertilizers for %d acres.\n", potash_fertilizer_required, land_area);
+        *potash_required = land_area * 1.0;
     }
 
     // Handle Calcium
+    *lime_required = 0;
+    if (calcium <= 0.8) 
+    {   
+        *lime_required = land_area * 1.5;
+    }
+
+    *sulfur_required = 0;
     if (calcium > 1.5) 
     {
-        float sulfur_required_calcium = land_area * 0.5;
-        printf("High Calcium: Apply %.2f tons of sulfur.\n", sulfur_required_calcium);
-        fprintf(file, "High Calcium: Apply %.2f tons of sulfur for %d acres.\n", sulfur_required_calcium, land_area);
-    } 
-    else if (calcium < 0.8) 
-    {
-        float lime_required = land_area * 1.0;
-        printf("Low Calcium: Apply %.2f tons of lime.\n", lime_required);
-        fprintf(file, "Low Calcium: Apply %.2f tons of lime for %d acres.\n", lime_required, land_area);
+        *sulfur_required = land_area * 0.5;
     }
 
     // Handle Magnesium
-    if (magnesium > 0.8) 
+    *magnesium_sulfate_required = 0;
+    *calcium_sulfate_required = 0;
+    if (magnesium < 0.4) 
     {
-        float calcium_sulfate_required = land_area * 0.3;
-        printf("High Magnesium: Apply %.2f tons of calcium sulfate.\n", calcium_sulfate_required);
-        fprintf(file, "High Magnesium: Apply %.2f tons of calcium sulfate for %d acres.\n", calcium_sulfate_required, land_area);
-    } 
-    else if (magnesium < 0.4) 
+        *magnesium_sulfate_required = land_area * 0.5;
+    }
+    else if (magnesium > 0.8) 
     {
-        float magnesium_sulfate_required = land_area * 0.4;
-        printf("Low Magnesium: Apply %.2f tons of magnesium sulfate.\n", magnesium_sulfate_required);
-        fprintf(file, "Low Magnesium: Apply %.2f tons of magnesium sulfate for %d acres.\n", magnesium_sulfate_required, land_area);
+        *calcium_sulfate_required = land_area * 0.3;
     }
 
-    printf("\nMaterial estimation complete. Details saved to the report file.\n");
+    if (*gypsum_required == 0) 
+        *gypsum_required = 0.0;
+    if (*urea_required == 0) 
+        *urea_required = 0.0;
+    if (*potash_required == 0) 
+        *potash_required = 0.0;
+    if (*lime_required == 0) 
+        *lime_required = 0.0;
+    if (*sulfur_required == 0) 
+        *sulfur_required = 0.0;
+    if (*magnesium_sulfate_required == 0) 
+        *magnesium_sulfate_required = 0.0;
+    if (*calcium_sulfate_required == 0) 
+        *calcium_sulfate_required = 0.0;
+
+    printf("Details saved to the report file.\n");
 }
 
-void fileSaveReport(FILE *file, CropData crop, const char *region, const char *season, float *values, int land_area, float gypsum_required, float urea_required, float potash_required, float lime_required, float sulfur_required, float magnesium_sulfate_required, float calcium_sulfate_required) 
+
+void SaveReportFile(FILE *file, CropData crop, const char *region, const char *season, float *values, int land_area, 
+                    float gypsum_required, float urea_required, float potash_required, float lime_required, 
+                    float sulfur_required, float magnesium_sulfate_required, float calcium_sulfate_required, Date date, int recovery_months)  
 {
     const char *parameters[] = {"Soil Salinity", "Nitrogen", "Potassium", "Calcium", "Magnesium", "Water pH", "Water Table Depth"};
     const char *units[] = {"dS/m", "%", "%", "%", "%", "", "feet"};
     
     fprintf(file, "Soil and Water Analysis Report\n");
     fprintf(file, "---------------------------------\n");
+    fprintf(file, "Date: %02d/%02d/%04d\n", date.day, date.month, date.year);
     fprintf(file, "Crop: %s\n", crop.crop_name);
     fprintf(file, "Region: %s\n", region);
     fprintf(file, "Season: %s\n", season);
@@ -400,6 +406,7 @@ void fileSaveReport(FILE *file, CropData crop, const char *region, const char *s
     if (calcium_sulfate_required > 0) 
         fprintf(file, "- Calcium sulfate required: %.2f tons\n", calcium_sulfate_required);
 
+    fprintf(file, "Recovery Time: %d months\n", recovery_months);
     fprintf(file, "\nNote: Recovery times and specific measures depend on local conditions.\n");
     fprintf(file, "---------------------------------\n");
     fprintf(file, "End of Report\n");
