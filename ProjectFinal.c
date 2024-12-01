@@ -164,25 +164,34 @@ int main() {
     }
 
     AnalysisofSoilWater(selectedcrop, values, region, season, fertilizerConfig, file, landarea);
-    // Estimate Minerals will be passed throught Analyze Functions
     savereportfile(region, season, selectedcrop, values, date, file, recoverymonths, issues);
     fclose(file);
 
     return 0;
 }
-int ValidateCrop(char *crop_name, CropData crops[], int crop_count) {
+
+// ValidateCrop inputted Crop
+int ValidateCrop(char *crop_name, CropData crops[], int crop_count) 
+{
     for (int i = 0; i < crop_count; i++) {
-        if (strcmp(crop_name, crops[i].crop_name) == 0) {
+        if (strcmp(crop_name, crops[i].crop_name) == 0) 
+        {
             return 1;
         }
     }
     return 0;
 }
-int ValidateRegion(char *crop_name, char *region, RegionValidity Regions[], int region_count) {
-    for (int i = 0; i < region_count; i++) {
-        if (strcmp(crop_name, Regions[i].crop_name) == 0) {
+
+// Validate if the crop grows in that region
+int ValidateRegion(char *crop_name, char *region, RegionValidity Regions[], int region_count) 
+{
+    for (int i = 0; i < region_count; i++) 
+    {
+        if (strcmp(crop_name, Regions[i].crop_name) == 0) 
+        {
             for (int j = 0; j < 3; j++) {
-                if (strcmp(region, Regions[i].regions[j]) == 0) {
+                if (strcmp(region, Regions[i].regions[j]) == 0) 
+                {
                     return 1; 
                 }
             }
@@ -190,53 +199,208 @@ int ValidateRegion(char *crop_name, char *region, RegionValidity Regions[], int 
     }
     return 0; 
 }
-void AnalysisofSoilWater(CropData crop, float *values, char *region, char *season, Fertilizer fertilizerConfig, FILE *file, float landarea) {
-    int severity = 0;
+// Function to analyze soil and water conditions
+void analyzeSoilAndWater(CropData crop, float *values, char *region, char *season, FertilizerConfig fertilizerConfig, FILE *file, int land_area) 
+{
+    printf("\nSoil and Water Analysis for Crop: %s\nRegion: %s | Season: %s\n", crop.crop_name, region, season);
 
-    // Compare each parameter with thresholds
-    if (values[0] > crop.salinity_max) {
-        fprintf(file, "High salinity detected. Apply %.2f kg of gypsum per acre.\n", fertilizerConfig.gypsum_per_acre);
-        severity++;
-    }
-    if (values[1] < crop.nitrogen_min) {
-        fprintf(file, "Low nitrogen detected. Add %.2f kg of urea fertilizer per acre.\n", fertilizerConfig.urea_per_acre);
-        severity++;
-    }
-    // Repeat for other parameters (Potassium, Calcium, etc.)
+    const char *parameters[] = {"Soil Salinity", "Nitrogen", "Potassium", "Calcium", "Magnesium", "Water pH", "Water Table Depth"};
+    float ranges[][2] = 
+    {
+        {crop.salinity_min, crop.salinity_max}, {crop.nitrogen_min, crop.nitrogen_max},
+        {crop.potassium_min, crop.potassium_max},
+        {crop.calcium_min, crop.calcium_max}, {crop.magnesium_min, crop.magnesium_max},
+        {crop.water_pH_min, crop.water_pH_max},
+        {crop.water_table_min, crop.water_table_max}
+    };
 
-    // Severity grading
-    if (severity == 0) {
-        fprintf(file, "Soil condition: Fertile\n");
-    } else if (severity <= 3) {
-        fprintf(file, "Soil condition: Sub-Fertile\n");
-    } else {
-        fprintf(file, "Soil condition: Unfertile\n");
+    const char *units[] = {"dS/m", "%", "%", "%", "%", "", "feet"};
+    const char *actions[] = 
+    {
+        "Apply gypsum to reduce salinity", "Add urea fertilizer for nitrogen boost", "Add potassium-based fertilizers",
+        "Add lime to improve calcium levels", "Add magnesium sulfate to correct magnesium deficiency", 
+        "Adjust soil pH using sulfur-based additives", "Improve drainage or irrigation practices"
+    };
+
+    int recovery_months = 0;
+    int issues = 0;
+    int overall_health = 1;
+
+    for (int i = 0; i < 7; i++) 
+    {
+        if (i == 0) 
+        {
+            if (values[i] < ranges[i][0]) 
+            {
+                printf("- %s: %.2f %s - Low (%s)\n", parameters[i], values[i], units[i], actions[i]);
+                recovery_months = 6;
+                issues++;
+                overall_health = 3;
+            } 
+            else if (values[i] > ranges[i][1]) 
+            {
+                printf("- %s: %.2f %s - High (%s)\n", parameters[i], values[i], units[i], actions[i]);
+                recovery_months = 6;
+                issues++;
+                overall_health = 2;
+            } 
+            else 
+            {
+                printf("- %s: %.2f %s - Optimal\n", parameters[i], values[i], units[i]);
+            }
+        } 
+        else 
+        {
+            if (values[i] < ranges[i][0]) 
+            {
+                printf("- %s: %.2f %s - Low (%s)\n", parameters[i], values[i], units[i], actions[i]);
+                recovery_months = 6;
+                issues++;
+                overall_health = 3;
+            } 
+            else if (values[i] > ranges[i][1]) 
+            {
+                printf("- %s: %.2f %s - High (%s)\n", parameters[i], values[i], units[i], actions[i]);
+                recovery_months = 6;
+                issues++;
+                overall_health = 2;
+            } 
+            else 
+            {
+                printf("- %s: %.2f %s - Optimal\n", parameters[i], values[i], units[i]);
+            }
+        }
     }
+
+    if (overall_health == 3) 
+    {
+        recovery_months = 12;
+    } 
+    else if (overall_health == 2) 
+    {
+        recovery_months = 6;
+    }
+
+    estimateMaterials(land_area, values[0], values[1], file);
 }
 
+// Function to estimate required materials
+void estimateMaterials(int land_area, float salinity, float nitrogen, float potassium, float calcium, float magnesium, FILE *file) 
+{
+    printf("\nEstimating Materials for %d acres of land...\n", land_area);
 
+    // Handle Salinity
+    if (salinity > 2.0) 
+    {
+        float gypsum_required_high = land_area * 2;
+        printf("High Salinity: Apply %.2f tons of gypsum.\n", gypsum_required_high);
+        fprintf(file, "High Salinity: Apply %.2f tons of gypsum for %d acres.\n", gypsum_required_high, land_area);
+    } 
+    else if (salinity < 0.5) 
+    {
+        float saline_water_required = land_area * 0.5;
+        printf("Low Salinity: Introduce %.2f units of saline water.\n", saline_water_required);
+        fprintf(file, "Low Salinity: Introduce %.2f units of saline water for %d acres.\n", saline_water_required, land_area);
+    }
 
+    // Handle Nitrogen
+    if (nitrogen > 2.5) 
+    {
+        printf("High Nitrogen: Avoid applying urea.\n");
+        fprintf(file, "High Nitrogen: Avoid applying urea for %d acres.\n", land_area);
+    } 
+    else if (nitrogen < 1.5) 
+    {
+        float urea_required_low = land_area * 1.5;
+        printf("Low Nitrogen: Apply %.2f tons of urea.\n", urea_required_low);
+        fprintf(file, "Low Nitrogen: Apply %.2f tons of urea for %d acres.\n", urea_required_low, land_area);
+    }
 
-// Validity of Region and Crop Function: Crop validity is basically the crop you entered is valid to the pre-defined or not.
-//                                       Region validity is if the crop even grows in that region:
-//                                           {"Wheat", {"Punjab", "Sindh", "KPK"}},
-//                                           {"Cotton", {"Sindh", "Punjab", "KPK"}},
-//                                           {"Rice", {"Punjab", "Sindh", "KPK"}},
-//                                           {"Sugarcane", {"Punjab", "Sindh", "KPK"}}
-//                                       Wheat only grows in Punjab Sindh and KPK etc.
+    // Handle Potassium
+    if (potassium > 1.0) 
+    {
+        float gypsum_required_potassium = land_area * 0.5;
+        printf("High Potassium: Apply %.2f tons of gypsum.\n", gypsum_required_potassium);
+        fprintf(file, "High Potassium: Apply %.2f tons of gypsum for %d acres.\n", gypsum_required_potassium, land_area);
+    } 
+    else if (potassium < 0.5) 
+    {
+        float potash_fertilizer_required = land_area * 0.8;
+        printf("Low Potassium: Apply %.2f tons of potash-based fertilizers.\n", potash_fertilizer_required);
+        fprintf(file, "Low Potassium: Apply %.2f tons of potash-based fertilizers for %d acres.\n", potash_fertilizer_required, land_area);
+    }
 
-//SoilWater Analysis Function : take the input values and comparing with the pre-defined values and creating a algorithm:
-// this alogrithm finds how bad the condition of the soil is like if the compared values are all high the soil condition is poor meaning unfertile.
-// 1 = fertile 2 = sub-fertile 3 = unfertile
+    // Handle Calcium
+    if (calcium > 1.5) 
+    {
+        float sulfur_required_calcium = land_area * 0.5;
+        printf("High Calcium: Apply %.2f tons of sulfur.\n", sulfur_required_calcium);
+        fprintf(file, "High Calcium: Apply %.2f tons of sulfur for %d acres.\n", sulfur_required_calcium, land_area);
+    } 
+    else if (calcium < 0.8) 
+    {
+        float lime_required = land_area * 1.0;
+        printf("Low Calcium: Apply %.2f tons of lime.\n", lime_required);
+        fprintf(file, "Low Calcium: Apply %.2f tons of lime for %d acres.\n", lime_required, land_area);
+    }
 
-//Estimae Minerals Functions : After inputting % of each minerals, how much 
-//    "Apply gypsum to reduce salinity", "Add urea fertilizer for nitrogen boost", "Add potassium-based fertilizers",
-//    "Add lime to improve calcium levels", "Add magnesium sulfate to correct magnesium deficiency", 
-//    "Adjust soil pH using sulfur-based additives", "Improve drainage or irrigation practices"
-// per Acre is supposed to be used....
+    // Handle Magnesium
+    if (magnesium > 0.8) 
+    {
+        float calcium_sulfate_required = land_area * 0.3;
+        printf("High Magnesium: Apply %.2f tons of calcium sulfate.\n", calcium_sulfate_required);
+        fprintf(file, "High Magnesium: Apply %.2f tons of calcium sulfate for %d acres.\n", calcium_sulfate_required, land_area);
+    } 
+    else if (magnesium < 0.4) 
+    {
+        float magnesium_sulfate_required = land_area * 0.4;
+        printf("Low Magnesium: Apply %.2f tons of magnesium sulfate.\n", magnesium_sulfate_required);
+        fprintf(file, "Low Magnesium: Apply %.2f tons of magnesium sulfate for %d acres.\n", magnesium_sulfate_required, land_area);
+    }
 
+    printf("\nMaterial estimation complete. Details saved to the report file.\n");
+}
 
+void fileSaveReport(FILE *file, CropData crop, const char *region, const char *season, float *values, int land_area, float gypsum_required, float urea_required, float potash_required, float lime_required, float sulfur_required, float magnesium_sulfate_required, float calcium_sulfate_required) 
+{
+    const char *parameters[] = {"Soil Salinity", "Nitrogen", "Potassium", "Calcium", "Magnesium", "Water pH", "Water Table Depth"};
+    const char *units[] = {"dS/m", "%", "%", "%", "%", "", "feet"};
+    
+    fprintf(file, "Soil and Water Analysis Report\n");
+    fprintf(file, "---------------------------------\n");
+    fprintf(file, "Crop: %s\n", crop.crop_name);
+    fprintf(file, "Region: %s\n", region);
+    fprintf(file, "Season: %s\n", season);
+    fprintf(file, "Land Area: %d acres\n", land_area);
+    fprintf(file, "\nSoil and Water Parameters:\n");
+    fprintf(file, "---------------------------------\n");
+    
+    // Log All parameters
+    for (int i = 0; i < 7; i++) 
+    {
+        fprintf(file, "- %s: %.2f %s\n", parameters[i], values[i], units[i]);
+    }
 
+    fprintf(file, "\nRecommendations and Material Estimates:\n");
+    fprintf(file, "---------------------------------\n");
+    
+    // Log material estimates
+    if (gypsum_required > 0) 
+        fprintf(file, "- Gypsum required: %.2f tons\n", gypsum_required);
+    if (urea_required > 0) 
+        fprintf(file, "- Urea required: %.2f tons\n", urea_required);
+    if (potash_required > 0) 
+        fprintf(file, "- Potash-based fertilizer required: %.2f tons\n", potash_required);
+    if (lime_required > 0) 
+        fprintf(file, "- Lime required: %.2f tons\n", lime_required);
+    if (sulfur_required > 0) 
+        fprintf(file, "- Sulfur required: %.2f tons\n", sulfur_required);
+    if (magnesium_sulfate_required > 0) 
+        fprintf(file, "- Magnesium sulfate required: %.2f tons\n", magnesium_sulfate_required);
+    if (calcium_sulfate_required > 0) 
+        fprintf(file, "- Calcium sulfate required: %.2f tons\n", calcium_sulfate_required);
 
-
-
+    fprintf(file, "\nNote: Recovery times and specific measures depend on local conditions.\n");
+    fprintf(file, "---------------------------------\n");
+    fprintf(file, "End of Report\n");
+}
